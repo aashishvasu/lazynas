@@ -1,0 +1,50 @@
+[project]
+name = "lazynas"
+version = "0.1.0"
+description = "Faux-NAS pool manager for snapraid + mergerfs: conf, fstab, cron, and maintenance from one callsite."
+readme = "README.md"
+requires-python = ">=3.11"  # floor is tomllib (registry.py); nothing here needs newer
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Aashish Vasudevan", email = "aashishvasu@gmail.com" }]
+keywords = ["snapraid", "mergerfs", "nas", "storage", "raid"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Archiving :: Backup",
+    "Topic :: System :: Filesystems",
+]
+# Floors are the versions that first carry the APIs actually used, not the
+# latest-installed dev versions: pydantic v2 (AfterValidator/model_validator),
+# typer 0.9 (Typer(no_args_is_help=...), classic Option), tomli_w.dumps.
+dependencies = [
+    "typer>=0.9",
+    "pydantic>=2.0",
+    "tomli-w>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+lazynas = "lazynas.cli:entry"
+
+[project.urls]
+Homepage = "https://github.com/aashishvasu/lazynas"
+Repository = "https://github.com/aashishvasu/lazynas"
+Issues = "https://github.com/aashishvasu/lazynas/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lazynas"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
