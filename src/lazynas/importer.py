@@ -77,11 +77,22 @@ def harvest_fstab_mounts(fstab_text: str) -> dict[str, tuple[str, str]]:
     return mounts
 
 
+def _semantic_line(line: str) -> str:
+    fields = line.split()
+    # `data NAME MOUNT` only: _clean_mount strips the trailing slash on the way
+    # in, so a hand-written conf would otherwise always show a phantom change.
+    # Excludes keep theirs, since a trailing slash is meaningful in a snapraid
+    # exclude pattern (/tmp/ matches the directory, /tmp does not).
+    if len(fields) == 3 and fields[0] == "data":
+        fields[2] = fields[2].rstrip("/")
+    return " ".join(fields)
+
+
 def semantic_directives(conf_text: str) -> set[str]:
     """Whitespace-normalized, comment-free directive set — for comparing a
     rendered conf against a hand-written one semantically, not textually."""
     return {
-        " ".join(line.split())
+        _semantic_line(line)
         for line in conf_text.splitlines()
         if line.strip() and not line.strip().startswith("#")
     }
