@@ -116,6 +116,7 @@ class Pool(BaseModel):
     scrub: ScrubPolicy = Field(default_factory=ScrubPolicy)
     excludes: list[str] = Field(default_factory=lambda: list(DEFAULT_EXCLUDES))
     extra_content: list[str] = Field(default_factory=list)  # content files outside the data disks
+    extra_directives: list[str] = Field(default_factory=list)  # unmodeled snapraid directives, verbatim
     schedule: Cron = "0 3 * * *"
     nohidden: bool = False
 

@@ -22,7 +22,7 @@ lazynas is a thin coordinator, so the storage stack needs to be in place first:
 - **Linux.** It writes fstab, drops files in `/etc/cron.d`, and mounts FUSE filesystems. None of that translates anywhere else.
 - **Python 3.11 or newer.** `install.sh` finds a suitable interpreter for you (see [Install](#install)).
 - **snapraid 11.0 or newer.** v11 is where adding a parity level became safe (existing parity stays protected during the rebuild), and lazynas leans on that.
-- **mergerfs, 2.40 or newer.** The mount options lazynas writes (`category.create=pfrd`, `branches-mount-timeout`) assume a modern version and skip legacy options like `allow_other` entirely.
+- **mergerfs, 2.41 or newer.** `branches-mount-timeout`, which lazynas writes so a dead branch can't hang the mount, arrived in 2.41. An older mergerfs rejects the unknown option and the pool won't mount.
 - **A cron daemon that reads `/etc/cron.d`**: cronie, vixie-cron, whatever your distro ships. Almost certainly already there.
 - **`lsblk`** (part of util-linux) for disk discovery. Also almost certainly already there.
 - **Formatted disks.** lazynas mounts filesystems and tracks them by UUID; it never partitions or formats anything. Bring your own ext4/xfs.
@@ -61,7 +61,7 @@ sudo mount -a          # mount disks + pool (defaults: /mnt/lazynas/tank/dN, poo
 sudo lazynas sync tank # build initial parity
 ```
 
-Disk specs accept a device path, filesystem UUID, or current mountpoint, with an optional `:<mount>` if you'd rather pick where each disk mounts, and an optional `name=` prefix on data disks to choose the snapraid `data NAME` identity (default: `d1`, `d2`, …). Pick names you like at create time — once synced, a name can never be changed:
+Disk specs accept a device path, filesystem UUID, or current mountpoint, with an optional `:<mount>` if you'd rather pick where each disk mounts, and an optional `name=` prefix on data disks to choose the snapraid `data NAME` identity (default: `d1`, `d2`, ...). Pick names you like at create time. Once synced, a name can never be changed:
 
 ```sh
 sudo lazynas pool create tank -d films=/dev/sda1:/mnt/films -d tv=/dev/sdb1:/mnt/tv -p /dev/sdd1:/mnt/parity1
@@ -73,7 +73,7 @@ sudo lazynas pool create tank -d films=/dev/sda1:/mnt/films -d tv=/dev/sdb1:/mnt
 - `--scrub` / `--no-scrub` controls whether a scrub is scheduled at all.
 - `--schedule` and `--scrub-schedule` set the sync and scrub cron cadences (defaults: daily 3am, weekly Sunday 4am).
 - `--mergerfs-opt OPT` appends an extra mergerfs mount option verbatim; repeatable.
-- Content copies: every data disk carries one, and by default so does the OS disk (`/var/lib/lazynas/<pool>.content`) — snapraid recommends a copy outside the array. `--no-os-content` skips the OS copy; `--extra-content PATH` adds more elsewhere, repeatable.
+- Content copies: every data disk carries one, and by default so does the OS disk (`/var/lib/lazynas/<pool>.content`), since snapraid recommends a copy outside the array. `--no-os-content` skips the OS copy; `--extra-content PATH` adds more elsewhere, repeatable.
 
 ## Adopting an existing setup
 

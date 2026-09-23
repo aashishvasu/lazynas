@@ -5,7 +5,7 @@ without the user rebuilding anything."""
 import re
 from dataclasses import dataclass, field
 
-from lazynas import disks
+from lazynas import disks, render
 from lazynas.models import Pool
 from lazynas.system import LazynasError
 
@@ -101,7 +101,7 @@ def import_pool(
     parsed = parse_snapraid_conf(conf_text)
     if parsed.unknown:
         warnings.append(
-            "directives lazynas does not model will be dropped on apply: "
+            "directives lazynas does not model are preserved verbatim but not managed: "
             + "; ".join(parsed.unknown)
         )
     if not parsed.data:
@@ -127,9 +127,10 @@ def import_pool(
             extra_content.append(content_file)
 
     mergerfs: dict = {}
+    existing_opts = None
     found = find_mergerfs_line(fstab_text, pool_mount)
     if found:
-        branches, pool_mount, opts = found
+        branches, pool_mount, existing_opts = found
         if any("*" in b for b in branches):
             warnings.append(
                 "existing fstab uses a glob for branches; lazynas will render an "
@@ -142,9 +143,9 @@ def import_pool(
                     "fstab branches that are not snapraid data disks will be dropped: "
                     + ", ".join(sorted(extra_branches))
                 )
-        if m := re.search(r"category\.create=([^,]+)", opts):
+        if m := re.search(r"category\.create=([^,]+)", existing_opts):
             mergerfs["create_policy"] = m.group(1)
-        if m := re.search(r"minfreespace=([^,]+)", opts):
+        if m := re.search(r"minfreespace=([^,]+)", existing_opts):
             mergerfs["minfreespace"] = m.group(1)
     elif pool_mount is None:
         raise LazynasError(
@@ -187,8 +188,31 @@ def import_pool(
         mergerfs=mergerfs,
         excludes=parsed.excludes,  # imported verbatim, keeping the semantic diff clean
         extra_content=extra_content,
+        extra_directives=parsed.unknown,
         nohidden=parsed.nohidden,
     )
+    if existing_opts is not None:
+        # Partition the user's options against the set render manages. Options
+        # lazynas does not understand survive verbatim; a managed key keeps
+        # render's value and warns, so the option string never has two values
+        # for one key.
+        managed = dict(render.mergerfs_option_pairs(pool))
+        preserve = []
+        for opt in existing_opts.split(","):
+            if not opt:
+                continue
+            key, sep, value = opt.partition("=")
+            if not sep:
+                if opt != "nofail":  # render emits nofail on the fstab line itself
+                    preserve.append(opt)
+            elif key not in managed:
+                preserve.append(opt)
+            elif value != managed[key]:
+                warnings.append(
+                    f"mergerfs option {opt} is managed by lazynas and will be rendered as "
+                    f"{key}={managed[key]}"
+                )
+        pool.mergerfs.extra = preserve
     if pool.content_copy_shortfall():
         warnings.append(
             f"only {len(pool.content_files())} content copies for {len(pool.parity)} "

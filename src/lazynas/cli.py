@@ -6,7 +6,7 @@ import typer
 from pydantic import ValidationError
 
 from lazynas import __version__, disks, paths, render, runner, system
-from lazynas.importer import import_pool, semantic_directives
+from lazynas.importer import find_mergerfs_line, import_pool, semantic_directives
 from lazynas.models import MergerfsOptions, Pool, ScrubPolicy, Thresholds
 from lazynas.registry import Registry
 from lazynas.snapraid import Snapraid
@@ -124,6 +124,9 @@ def _apply(c: Ctx, pool: Pool) -> None:
                     f"check `findmnt {directory}` and umount it, then re-run "
                     f"`lazynas pool apply {pool.name}`"
                 ) from exc
+        # cron appends to paths.log_file(); the redirect fails before lazynas
+        # runs if the directory is missing, so create it here, not in runner.
+        paths.log_dir().mkdir(parents=True, exist_ok=True)
 
 
 def _warn(message: str) -> None:
@@ -308,6 +311,21 @@ def import_(
             typer.secho(f"  - {line}", fg=typer.colors.RED)
         for line in sorted(rendered - existing):
             typer.secho(f"  + {line}", fg=typer.colors.GREEN)
+
+    found = find_mergerfs_line(fstab_text, pool.mount)
+    if found:
+        before = set(found[2].split(","))
+        after = set(render.fstab_options(pool).split(","))
+        if before == after:
+            typer.secho("mergerfs options round-trip identically.", fg=typer.colors.GREEN)
+        else:
+            typer.echo("mergerfs option differences vs your existing fstab line:")
+            for opt in sorted(before - after):
+                typer.secho(f"  - {opt}", fg=typer.colors.RED)
+            for opt in sorted(after - before):
+                typer.secho(f"  + {opt}", fg=typer.colors.GREEN)
+    else:
+        typer.echo("no mergerfs fstab entry found; no options to compare.")
 
     c.registry.upsert(pool, dry_run=c.dry_run)
     typer.echo(f"\npool {name!r} imported into the registry; no system files were changed.")

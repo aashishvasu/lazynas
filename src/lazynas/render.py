@@ -19,24 +19,38 @@ def render_snapraid_conf(pool: Pool) -> str:
         "",
         *(["nohidden"] if pool.nohidden else []),
         *(f"exclude {e}" for e in pool.excludes),
+        *pool.extra_directives,
     ]
     return "\n".join(lines) + "\n"
 
 
+def mergerfs_option_pairs(pool: Pool) -> list[tuple[str, str]]:
+    """The option set lazynas manages, as (key, value) pairs. Import uses
+    this to tell a managed option from one it must preserve verbatim."""
+    return [
+        ("cache.files", "off"),
+        ("category.create", pool.mergerfs.create_policy),
+        ("func.getattr", "newest"),
+        ("dropcacheonclose", "false"),
+        ("minfreespace", pool.mergerfs.minfreespace),
+        ("branches-mount-timeout", "30"),  # 2.41+; this line sets the floor in README
+        ("x-systemd.mount-timeout", "45s"),
+        ("fsname", pool.name),
+    ]
+
+
 def mergerfs_options(pool: Pool) -> str:
     # Modern mergerfs option set (Linux 6.6+ guidance).
-    opts = [
-        "cache.files=off",
-        f"category.create={pool.mergerfs.create_policy}",
-        "func.getattr=newest",
-        "dropcacheonclose=false",
-        f"minfreespace={pool.mergerfs.minfreespace}",
-        "branches-mount-timeout=30",
-        "x-systemd.mount-timeout=45s",
-        f"fsname={pool.name}",
-    ]
+    opts = [f"{key}={value}" for key, value in mergerfs_option_pairs(pool)]
     opts.extend(pool.mergerfs.extra)
     return ",".join(opts)
+
+
+def fstab_options(pool: Pool) -> str:
+    """The whole fourth fstab field of the mergerfs line: the mergerfs options
+    plus nofail, which is an fstab flag rather than a mergerfs one. Import diffs
+    against this, so the comparison matches what actually gets written."""
+    return f"{mergerfs_options(pool)},nofail"
 
 
 def _disk_line(disk: DataDisk | ParityDisk) -> str:
@@ -55,7 +69,7 @@ def render_fstab_block(pool: Pool) -> str:
     lines = [_disk_line(d) for d in pool.data]
     lines += [_disk_line(p) for p in sorted(pool.parity, key=lambda p: p.level)]
     branches = ":".join(pool.branches)
-    lines.append(f"{branches} {pool.mount} fuse.mergerfs {mergerfs_options(pool)} 0 0")
+    lines.append(f"{branches} {pool.mount} fuse.mergerfs {fstab_options(pool)} 0 0")
     return "\n".join(lines)
 
 
